@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.pipeworx-io/politician-trades",
+  "title": "Politician Trades",
+  "description": "Politician Trades MCP — US congressional + executive stock trading",
+  "version": "0.1.0",
+  "websiteUrl": "https://pipeworx.io/packs/politician-trades",
+  "repository": {
+    "url": "https://github.com/pipeworx-io/mcp-politician-trades",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://gateway.pipeworx.io/politician-trades/mcp"
+    }
+  ]
+}
