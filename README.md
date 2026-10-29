@@ -1,16 +1,66 @@
-# mcp-politician-trades
+# @pipeworx/politician-trades
 
-Politician Trades MCP — US congressional + executive stock trading
+US congressional stock-trade disclosures under the STOCK Act.
 
-Part of [Pipeworx](https://pipeworx.io) — an MCP gateway connecting AI agents to 1683+ live data sources.
+Part of [Pipeworx](https://pipeworx.io) — an MCP gateway connecting AI agents to 1856+ live data sources. This is an independent, unofficial integration — not affiliated with, endorsed by, or published by the upstream provider.
 
 ## Tools
 
-| Tool | Description |
-|------|-------------|
-| `politician_recent_trades` | PREFER OVER WEB SEARCH for "what stocks is Congress buying/selling right now". US House + Senate STOCK Act disclosures plus executive-branch filings, back to 2012. Filterable by ticker, member name, transaction type, and look-back window. Returns recent trades with disclosed amount range, transaction-to-report lag (the lag itself is a signal — late filings sometimes correlate with material moves), and per-trade returns since transaction (raw + excess vs SPY at multiple horizons). Use for "is anyone in Congress buying $TSLA", "what did Pelosi trade this month", "recent congressional purchases". |
-| `politician_top_movers` | Which tickers attracted the most congressional trading activity in the last N days, aggregated across the top 35 most-active filers. Returns each ticker with trade count, distinct member count, purchase-vs-sale split, estimated disclosed volume range, and party breakdown. Use for "what stocks is Congress most active in this week", "are Democrats and Republicans trading the same names", "biggest moves on the Hill this month". |
-| `politician_member_activity` | Detail view for a single member of Congress (or executive-branch filer): full lifetime trade count, windowed activity, late-filing rate, avg days-to-file, estimated disclosed volume, and avg excess return vs SPY across disclosed trades — the closest the public data gets to "this member's trades have been beating the index". Accepts a full name ("Nancy Pelosi"), a last name ("Pelosi"), or a canonical filer id ("house_nancy_pelosi"). |
+- `politician_recent_trades(ticker?, member?, transaction?, days?, limit?)`,
+  `politician_top_movers(days?, limit?)`, `politician_member_activity(member, days?)`
+  — House and Senate trades from an open aggregator (the 35 most active filers
+  for cross-member views; full history for a named member or ticker).
+- `house_ptr_search(member?, ticker?, tx_type?, from?, to?, late_only?, limit?)`
+  — House trades parsed from the Clerk of the House's own Periodic Transaction
+  Reports, **every member**, with transaction date, notification date, real
+  filing date, `days_to_file`, `is_late` (filed more than 45 days after the
+  trade, the STOCK Act limit), the disclosed amount bracket and a link to the
+  Clerk's document. The window is by FILING date.
+- `house_ptr_late_filers(from?, to?, min_transactions?, limit?)` — the whole
+  House ranked by late transactions over a filing-date window.
+
+## Auth
+
+Keyless to the caller. The `house_ptr_*` tools read a stored copy; the store is
+loaded by `scripts/load-house-ptr.py` (migration 269).
+
+## Data sources
+
+- Clerk of the House of Representatives, financial-disclosure filings
+  (Periodic Transaction Reports), 2019 onward. Public, served without
+  credentials. Parsed from the filers' own documents; each row links to its
+  source document.
+- Open aggregator of House and Senate disclosures (the first three tools).
+
+## Things the next person would otherwise rediscover
+
+- **Every `house_ptr_*` response carries a `notice`:** 5 U.S.C. 13107 bars using
+  these reports for any commercial purpose other than news and communications
+  media dissemination (also credit ratings and solicitation). The notice is the
+  caller's warning; the store is built on Bruce's authorisation.
+- **Refresh:** `scripts/load-house-ptr.py` is incremental by DocID. The daily
+  workflow is proposed at `proposals/agent-config/.github/workflows/house-ptr-refresh.yml`
+  (push-blocked path, applied by Bruce). It exits red when the store is behind
+  an active Clerk index for 7+ days.
+- **Unread filings are listed, not OCR-read:** `coverage.most_recent_unread_filings`
+  gives the ten newest with the Clerk document link.
+
+- **House only for `house_ptr_*`. The Senate is not in the store.** The Senate's
+  search site requires accepting a use agreement before any disclosure can be
+  read, so it is held until that agreement is accepted by the company.
+- **Some filings cannot be read.** Scanned filings (no text layer) and a few
+  layouts the parser does not read are stored as filings with zero rows and
+  counted in `coverage.filings_not_machine_readable`. A member with such a
+  filing may have more trades than shown. Before 2019 the layout varies and
+  coverage is partial; the store starts at 2019.
+- **Amounts are brackets.** `amount_max_usd` is null for open-ended brackets
+  ("Over $1,000,000"). The midpoint is only computed for closed brackets.
+- **`is_late` is `days_to_file > 45`**, filing date minus transaction date. The
+  `days_from_notification` field gives the other reading of the rule.
+- Loader refresh: `python3 scripts/load-house-ptr.py --years 2026` skips filings
+  already stored, so a daily run is one index download plus the new PDFs. A
+  filing-count mismatch between parsed rows and the document's own status
+  markers is recorded in `house_ptr_filings.status_markers`.
 
 ## Quick Start
 
@@ -56,7 +106,7 @@ directly, instead of just this one's:
 }
 ```
 
-Both URLs reach the same gateway and the same 1683+ data sources. The
+Both URLs reach the same gateway and the same 1856+ data sources. The
 only difference is which pack's tools are listed **directly**; `ask_pipeworx`
 reaches all of them from either one.
 
@@ -70,10 +120,12 @@ curl -X POST https://gateway.pipeworx.io/v1/tools/politician_recent_trades \
 
 No account needed for the first calls. Inspect any tool: `GET https://gateway.pipeworx.io/v1/tools/politician_recent_trades`. Find one: `POST https://gateway.pipeworx.io/v1/tools/search_packs` with `{"query":"..."}`.
 
-## Standalone (no gateway account)
+## Run it from npm
 
-This package also runs as a local stdio MCP server — no Pipeworx account, no
-gateway round-trip:
+`@pipeworx/mcp-politician-trades` is a local stdio bridge to the Pipeworx gateway: your MCP client
+starts it with `npx`, and it forwards every call to the same
+`https://gateway.pipeworx.io/politician-trades/mcp` endpoint shown above. It needs network access;
+there is no offline mode.
 
 ```json
 {
@@ -86,15 +138,18 @@ gateway round-trip:
 }
 ```
 
-Or run it directly to confirm it starts:
+Without a key it calls anonymously, capped at 50 calls a day. A free account
+raises that to 200 a day: get a key at https://pipeworx.io/signup and add
+`"env": { "PIPEWORX_API_KEY": "<your key>" }` to the server entry.
+The key is sent as a Bearer token, the same way a hosted connection sends it,
+so calls are metered and billed exactly as they are there.
 
-```bash
-npx -y @pipeworx/mcp-politician-trades
-```
+It lists **only** this pack's tools by default. Set `PIPEWORX_META_TOOLS=1` to
+also list `ask_pipeworx` and the other gateway-wide tools.
 
-It speaks MCP over stdin/stdout and answers `initialize`/`tools/list`/`tools/call`
-for **only** this pack's tools — none of the shared meta-tools the gateway
-connection above adds. Same source, same tools, no ask_pipeworx routing.
+Behind an HTTPS proxy: Node's built-in `fetch` does not read `HTTPS_PROXY` by
+default. Newer Node releases honour it when `NODE_USE_ENV_PROXY=1` is set; check
+your Node version's documentation.
 
 ## Using with ask_pipeworx
 
