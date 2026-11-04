@@ -1,6 +1,6 @@
 {
   "name": "@pipeworx/mcp-politician-trades",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Politician Trades MCP — US congressional + executive stock trading disclosures under the STOCK Act (2012), surfaced for AI agents.",
   "type": "module",
   "main": "lib/index.js",
@@ -27,7 +27,7 @@
     "mode": "gateway",
     "slug": "politician-trades",
     "gatewaySlug": "politician-trades",
-    "sourceHash": "v1-86d69e69f6c911835a781b306107f5581cbdefd564b8780dfc038161e124702b",
-    "sourceCommit": "6bae4cfa7b6a73bbe014dc8820a19c80c842b21e"
+    "sourceHash": "v1-11ddb851c746172a2cf01235afe0b11fc44b0de43f9adb5e8513712af8e0e495",
+    "sourceCommit": "db27387ed3ef7ec4805d465f7964a7f65f937006"
   }
 }
